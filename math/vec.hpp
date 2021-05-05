@@ -14,9 +14,9 @@
 
 /*
  * std::fma is constant expression in:
- * 	- since GCC 8.1 support constexpr fma
- * 	- since Clang 12.0 support constexpr fma
- */	
+ *  - since GCC 8.1 support constexpr fma
+ *  - since Clang 12.0 support constexpr fma
+ */ 
 
 #ifndef POLLUX_MATH_CONSTEXPR
     #define GCC_MAJOR   (__GNUC__)
@@ -35,24 +35,24 @@
 #endif
 
 #ifndef POLLUX_MATH_CONSTINIT
-	#ifdef __cpp_constinit
-		#define POLLUX_MATH_CONSTINIT constinit
-	#else
-		#define POLLUX_MATH_CONSTINIT constexpr inline
-	#endif
+    #ifdef __cpp_constinit
+        #define POLLUX_MATH_CONSTINIT constinit
+    #else
+        #define POLLUX_MATH_CONSTINIT constexpr inline
+    #endif
 #endif
 
 #ifndef POLLUX_MATH_CONCEPT
-	#ifdef __cpp_lib_concepts
-		#define POLLUX_MATH_CONCEPT concept
-	#else
-		#define POLLUX_MATH_CONCEPT constexpr inline bool
-	#endif
+    #ifdef __cpp_lib_concepts
+        #define POLLUX_MATH_CONCEPT concept
+    #else
+        #define POLLUX_MATH_CONCEPT constexpr inline bool
+    #endif
 #endif
 
 namespace pollux::math::detail
 {
-	template <typename T> 
+    template <typename T> 
     constexpr inline const char* name_of = "unknown";
 
     #define REGISTER_NAMEOF(type) \
@@ -73,7 +73,7 @@ namespace pollux::math::detail
     REGISTER_NAMEOF(double);
     REGISTER_NAMEOF(long double);
 
-	#ifdef __cpp_lib_bit_cast
+    #ifdef __cpp_lib_bit_cast
         using std::bit_cast;
     #else
         template <typename To, typename From>
@@ -91,7 +91,7 @@ namespace pollux::math::detail
         }
     #endif
 
-	template <typename T, typename... U>
+    template <typename T, typename... U>
     POLLUX_MATH_CONCEPT is_any_v = std::disjunction_v<std::is_same<T, U>...>;
 
     template <typename T, typename... Rest>
@@ -103,27 +103,27 @@ namespace pollux::math::detail
     template <typename T, typename... Rest>
     POLLUX_MATH_CONCEPT all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
 
-	template <typename Fp>
-	constexpr inline bool is_approximately_eq(Fp a, Fp b, Fp tolerance = std::numeric_limits<Fp>::epsilon())
-	{
-		static_assert(std::is_floating_point_v<Fp>, "only floating-point types are supported");
-		
-		Fp diff = std::abs(a - b);
-		return (diff <= tolerance) || 
-			   (diff < std::max(std::abs(a), std::abs(b)) * tolerance); 
-	}
+    template <typename Fp>
+    constexpr inline bool is_approximately_eq(Fp a, Fp b, Fp tolerance = std::numeric_limits<Fp>::epsilon())
+    {
+        static_assert(std::is_floating_point_v<Fp>, "only floating-point types are supported");
+        
+        Fp diff = std::abs(a - b);
+        return (diff <= tolerance) || 
+               (diff < std::max(std::abs(a), std::abs(b)) * tolerance); 
+    }
 }
 
 namespace pollux::math
 {
-	template <std::size_t N, typename T>
+    template <std::size_t N, typename T>
     struct vec;
 
     using vec2i   = vec<2, int32_t>;
     using vec2u   = vec<2, uint32_t>;
     using vec2i64 = vec<2, int64_t>;
     using vec2u64 = vec<2, uint64_t>;
-	using vec2f   = vec<2, float>;
+    using vec2f   = vec<2, float>;
     using vec2d   = vec<2, double>;
 
     using vec3i   = vec<3, int32_t>;
@@ -246,7 +246,7 @@ namespace pollux::math
     template <std::size_t N, typename T>
     struct vec
     {
-        using this_type	     	= vec;
+        using this_type         = vec;
         using value_type        = T;
         using size_type         = std::size_t;
         using reference         = value_type&;
@@ -278,7 +278,7 @@ namespace pollux::math
         template <size_t M, typename U>
         friend constexpr auto operator/ (const vec<M, U>& u, U n) noexcept;
 
-		constexpr vec(const vec&) = default;
+        constexpr vec(const vec&) = default;
 
         template <typename Iter>
         constexpr inline vec(Iter first, Iter last)
@@ -307,7 +307,7 @@ namespace pollux::math
         requires (detail::is_same_v<T, U> && N == M)
     #else
         template <typename U, size_t M, 
-        		  typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
+                  typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
     #endif
         explicit constexpr inline vec(const U (&arr)[M])
             : vec(std::begin(arr), std::end(arr))
@@ -321,11 +321,11 @@ namespace pollux::math
          *  static_cast<T>(args)...
          */
     #ifdef __cpp_lib_concepts
-		template <typename... Args> 
+        template <typename... Args> 
         requires detail::all_same_v<T, Args...>
     #else
         template <typename... Args, 
-        		  typename = std::enable_if_t<detail::all_same_v<T, Args...>>> 
+                  typename = std::enable_if_t<detail::all_same_v<T, Args...>>> 
     #endif
         constexpr vec(Args... args)
             : components{{ std::forward<T>(args)... }}
@@ -371,32 +371,32 @@ namespace pollux::math
 
         constexpr vec& operator+= (const vec& v) & noexcept
         {
-			return *this = *this + v;
+            return *this = *this + v;
         }
 
-		constexpr vec& operator+= (value_type value) & noexcept
+        constexpr vec& operator+= (value_type value) & noexcept
         {
-			return *this = *this + value;
+            return *this = *this + value;
         }
 
         constexpr vec& operator-= (const vec& v) & noexcept
         {
-			return *this = *this - v;
+            return *this = *this - v;
         }
 
-		constexpr vec& operator-= (value_type value) & noexcept
+        constexpr vec& operator-= (value_type value) & noexcept
         {
-			return *this = *this - value;
+            return *this = *this - value;
         }
         
         constexpr vec& operator*= (value_type n) & noexcept
         {
-			return *this = *this * n;
+            return *this = *this * n;
         }
 
-		constexpr vec& operator/= (value_type n) & noexcept
+        constexpr vec& operator/= (value_type n) & noexcept
         {
-			return *this = *this / n;
+            return *this = *this / n;
         }
 
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
@@ -437,11 +437,11 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-		constexpr inline bool is_normalized() const noexcept(noexcept(length()))
-		{
-			using F = std::conditional_t<std::is_floating_point_v<T>, T, double>;
-			return detail::is_approximately_eq(static_cast<F>(length()), F{1});
-		}
+        constexpr inline bool is_normalized() const noexcept(noexcept(length()))
+        {
+            using F = std::conditional_t<std::is_floating_point_v<T>, T, double>;
+            return detail::is_approximately_eq(static_cast<F>(length()), F{1});
+        }
 
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
         [[nodiscard]]
@@ -456,10 +456,10 @@ namespace pollux::math
             return *this;
         }
 
-		constexpr inline void clear() noexcept
-		{
-			components.fill(value_type{});
-		}
+        constexpr inline void clear() noexcept
+        {
+            components.fill(value_type{});
+        }
 
         [[nodiscard]]
         constexpr auto& operator[](const size_type index) const noexcept
