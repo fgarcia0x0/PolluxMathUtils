@@ -386,9 +386,14 @@ namespace pollux::math
 			return *this = *this - value;
         }
         
-        constexpr vec& operator*= (const T& n) & noexcept
+        constexpr vec& operator*= (value_type n) & noexcept
         {
 			return *this = *this * n;
+        }
+
+		constexpr vec& operator/= (value_type n) & noexcept
+        {
+			return *this = *this / n;
         }
 
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
@@ -448,14 +453,19 @@ namespace pollux::math
             return *this;
         }
 
+		constexpr inline void clear() noexcept
+		{
+			components.fill(value_type{});
+		}
+
         [[nodiscard]]
-        constexpr auto& operator[](const size_t index) const noexcept
+        constexpr auto& operator[](const size_type index) const noexcept
         {
             return components[index];
         }
 
         [[nodiscard]]
-        constexpr auto& operator[](const size_t index) noexcept
+        constexpr auto& operator[](const size_type index) noexcept
         {
             return components[index];
         }
@@ -547,11 +557,6 @@ namespace pollux::math
         { 
             return components; 
         }
-
-        operator std::vector<T>() const noexcept
-        {
-            return std::vector<T>(begin(), end());
-        }
     };
 
     template <size_t N, typename T>
@@ -560,7 +565,7 @@ namespace pollux::math
     {
         vec temp(u);
         std::transform(u.begin(), u.end(), temp.begin(), 
-                      [n = std::move(n)](auto& elem) { return elem + n; });
+                      [n = std::move(n)](const auto& elem) { return elem + n; });
         return temp;
     }
 
@@ -569,7 +574,7 @@ namespace pollux::math
     constexpr auto operator+ (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         vec<N, T> temp;
-        std::transform(u.begin(), u.end(), v.begin(), temp.begin(), std::plus<>{});
+        std::transform(u.cbegin(), u.cend(), v.cbegin(), temp.begin(), std::plus<>{});
         return temp;
     }
 
@@ -578,8 +583,8 @@ namespace pollux::math
     constexpr auto operator- (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp;
-        std::transform(u.begin(), u.end(), temp.begin(), 
-                      [n = std::move(n)](auto& elem) { return elem - n; });
+        std::transform(u.cbegin(), u.cend(), temp.begin(), 
+                      [n = std::move(n)](const auto& elem) { return elem - n; });
         return temp;
     }
 
@@ -588,7 +593,7 @@ namespace pollux::math
     constexpr auto operator- (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         vec<N, T> temp;
-        std::transform(u.begin(), u.end(), v.begin(), temp.begin(), std::minus<>{});
+        std::transform(u.cbegin(), u.cend(), v.cbegin(), temp.begin(), std::minus<>{});
         return temp;
     }
 
@@ -597,8 +602,8 @@ namespace pollux::math
     constexpr auto operator* (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp(u);
-        std::transform(u.begin(), u.end(), temp.begin(), 
-                       [n = std::move(n)](auto& elem) { return elem * n; });
+        std::transform(u.cbegin(), u.cend(), temp.begin(), 
+                       [n = std::move(n)](const auto& elem) { return elem * n; });
         return temp;
     }
 
@@ -614,7 +619,7 @@ namespace pollux::math
     constexpr auto operator/ (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp(u);
-        std::transform(u.begin(), u.end(), temp.begin(), 
+        std::transform(u.cbegin(), u.cend(), temp.begin(), 
                       [n = std::move(n)](const auto& elem) 
                       { return elem / std::max(n, T{1}); });
         return temp;
