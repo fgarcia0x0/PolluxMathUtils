@@ -112,6 +112,15 @@ namespace pollux::math::detail
         return (diff <= tolerance) || 
                (diff < std::max(std::abs(a), std::abs(b)) * tolerance); 
     }
+
+    template <typename Iter, typename IterCategory>
+    POLLUX_MATH_CONCEPT is_iterator_category = is_same_v<typename std::iterator_traits<Iter>::iterator_category, IterCategory>;
+
+    template <typename Iter>
+    POLLUX_MATH_CONCEPT is_random_access_iterator_v = is_iterator_category<Iter, std::random_access_iterator_tag>;
+
+    template <typename Iter>
+    POLLUX_MATH_CONCEPT is_forward_iterator_v = is_iterator_category<Iter, std::forward_iterator_tag>;
 }
 
 namespace pollux::math
@@ -257,30 +266,14 @@ namespace pollux::math
 
         std::array<T, N> components;
 
-        template <size_t M, typename U>
-        friend constexpr auto operator+ (const vec<M, U>& u, U n) noexcept;
-
-        template <size_t M, typename U>
-        friend constexpr auto operator+ (const vec<M, U>& u, const vec<M, U>& v) noexcept;
-
-        template <size_t M, typename U>
-        friend constexpr auto operator- (const vec<M, U>& u, U n) noexcept;
-
-        template <size_t M, typename U>
-        friend constexpr auto operator- (const vec<M, U>& u, const vec<M, U>& v) noexcept;
-
-        template <size_t M, typename U>
-        friend constexpr auto operator* (const vec<M, U>& u, U n) noexcept;
-
-        template <size_t M, typename U>
-        friend constexpr auto operator* (const vec<M, U>& u, const vec<M, U>&) noexcept;
-
-        template <size_t M, typename U>
-        friend constexpr auto operator/ (const vec<M, U>& u, U n) noexcept;
-
         constexpr vec(const vec&) = default;
 
-        template <typename Iter>
+    #ifdef __cpp_lib_concepts
+        template <std::forward_iterator Iter> 
+    #else
+        template <typename Iter, 
+                  typename = std::enable_if_t<detail::is_forward_iterator_v<Iter>>>
+    #endif
         constexpr inline vec(Iter first, Iter last)
         {
             std::copy(first, last, begin());
@@ -451,14 +444,15 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-        vec clone() const noexcept
+        constexpr inline vec clone() const noexcept
         {
             return *this;
         }
 
-        constexpr inline void clear() noexcept
+        constexpr inline auto& clear() noexcept
         {
             components.fill(value_type{});
+            return *this;
         }
 
         [[nodiscard]]
@@ -564,7 +558,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator+ (const vec<N, T>& u, T n) noexcept
+    constexpr inline auto operator+ (const vec<N, T>& u, T n) noexcept
     {
         vec temp(u);
         std::transform(u.begin(), u.end(), temp.begin(), 
@@ -574,7 +568,14 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator+ (const vec<N, T>& u, const vec<N, T>& v) noexcept
+    constexpr inline auto operator+ (T n, const vec<N, T>& u) noexcept
+    {
+        return u + n;
+    }
+
+    template <size_t N, typename T>
+    [[nodiscard]]
+    constexpr inline auto operator+ (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         vec<N, T> temp;
         std::transform(u.cbegin(), u.cend(), v.cbegin(), temp.begin(), std::plus<>{});
@@ -583,7 +584,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator- (const vec<N, T>& u, T n) noexcept
+    constexpr inline auto operator- (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp;
         std::transform(u.cbegin(), u.cend(), temp.begin(), 
@@ -593,7 +594,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator- (const vec<N, T>& u, const vec<N, T>& v) noexcept
+    constexpr inline auto operator- (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         vec<N, T> temp;
         std::transform(u.cbegin(), u.cend(), v.cbegin(), temp.begin(), std::minus<>{});
@@ -602,7 +603,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator* (const vec<N, T>& u, T n) noexcept
+    constexpr inline auto operator* (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp(u);
         std::transform(u.cbegin(), u.cend(), temp.begin(), 
@@ -612,14 +613,21 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator* (const vec<N, T>& u, const vec<N, T>& v) noexcept
+    constexpr inline auto operator* (T n, const vec<N, T>& u) noexcept
+    {
+        return u * n;
+    }
+
+    template <size_t N, typename T>
+    [[nodiscard]]
+    constexpr inline auto operator* (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         return u.dot(v);
     }
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr auto operator/ (const vec<N, T>& u, T n) noexcept
+    constexpr inline auto operator/ (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp(u);
         std::transform(u.cbegin(), u.cend(), temp.begin(), 
