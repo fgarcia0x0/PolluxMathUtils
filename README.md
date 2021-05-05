@@ -7,8 +7,8 @@ A utility mathematical library made in modern C ++
 ## How to compile
 
 Every module is a header-only file, so just include the file in your project.
-# Example: 
-#### File: test.cpp
+## Example: 
+#### **File: test.cpp**
 ```cpp
 #include <pollux/math/vec.hpp>
 using namespace pollux::math;
