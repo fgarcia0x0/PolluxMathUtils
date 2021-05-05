@@ -1,4 +1,7 @@
-#include <iostream>
+#ifndef POLLUX_MATH_VECTOR_HPP
+#define POLLUX_MATH_VECTOR_HPP
+
+#include <ostream>
 #include <array>
 #include <cstdint>
 #include <cstddef>
@@ -643,3 +646,5 @@ namespace pollux::math
         first.swap(second);
     }
 }
+
+#endif
