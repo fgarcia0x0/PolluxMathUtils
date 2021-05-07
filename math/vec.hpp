@@ -558,7 +558,8 @@ namespace pollux::math
         {
             os << "vec<" << N << ", " << detail::name_of<T> << ">: (";
 
-            for (size_t i{}; i < N - 1; ++i)
+			size_type n{ N - 1 };
+            for (size_type i{}; i < n; ++i)
                 os << v[i] << ", ";
 
             os << v[N - 1] << ")\n";
