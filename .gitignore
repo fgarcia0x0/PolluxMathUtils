@@ -335,3 +335,4 @@ ASALocalRun/
 
 /.vs
 /.vscode
+*.json
