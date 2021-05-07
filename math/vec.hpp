@@ -113,6 +113,12 @@ namespace pollux::math::detail
                (diff < std::max(std::abs(a), std::abs(b)) * tolerance); 
     }
 
+	template <typename Dest, typename Source>
+	constexpr inline Dest round_if(Source value, bool condition) noexcept
+	{
+		return static_cast<Dest>(condition ? std::round(value) : value);
+	}
+
     template <typename Iter, typename IterCategory>
     POLLUX_MATH_CONCEPT is_iterator_category = is_same_v<typename std::iterator_traits<Iter>::iterator_category, IterCategory>;
 
@@ -355,7 +361,6 @@ namespace pollux::math
             return *this;
         }
 
-        // Dot Function
         [[nodiscard]]
         constexpr inline value_type dot(const vec& v) const noexcept
         {
@@ -400,9 +405,16 @@ namespace pollux::math
             // ||v||^2 == v * v
             T len{ (*this) * (*this) };
             
-            if (len > T{})
-                (*this) *= inv_sqrt_fn(static_cast<FP>(len));
-            
+			if (len > T{})
+			{
+				auto value = detail::round_if<value_type>(
+					inv_sqrt_fn(static_cast<FP>(len)),
+					!std::is_floating_point_v<value_type>
+				);
+
+				(*this) *= std::move(value);
+			}
+
             return *this;
         }
 
