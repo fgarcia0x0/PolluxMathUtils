@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <cstring>
 #include <algorithm>
+#include <functional>
 
 /*
  * std::fma is constant expression in:
@@ -30,7 +31,7 @@
          GCC_SIG && (GCC_MAJOR > 8 || (GCC_MAJOR == 8 && GCC_MINOR >= 1))
         #define POLLUX_MATH_CONSTEXPR constexpr
     #else
-        #define POLLUX_MATH_CONSTEXPR
+        #define POLLUX_MATH_CONSTEXPR inline
     #endif
 #endif
 
@@ -78,7 +79,7 @@ namespace pollux::math::detail
     #else
         template <typename To, typename From>
         [[nodiscard]]
-        constexpr inline To bit_cast(const From& src) noexcept
+        constexpr To bit_cast(const From& src) noexcept
         {
             static_assert(sizeof(To) == sizeof(From), "This implementation additionally requires source type and the destination type have same size");
             static_assert(std::is_trivially_copyable_v<From>, "This implementation additionally requires source type to be trivially copyable");
@@ -104,7 +105,7 @@ namespace pollux::math::detail
     POLLUX_MATH_CONCEPT all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
 
     template <typename Fp>
-    constexpr inline bool is_approximately_eq(Fp a, Fp b, Fp tolerance = std::numeric_limits<Fp>::epsilon())
+    constexpr bool is_approximately_eq(Fp a, Fp b, Fp tolerance = std::numeric_limits<Fp>::epsilon())
     {
         static_assert(std::is_floating_point_v<Fp>, "only floating-point types are supported");
         
@@ -114,7 +115,7 @@ namespace pollux::math::detail
     }
 
 	template <typename Dest, typename Source>
-	constexpr inline Dest round_if(Source value, bool condition) noexcept
+	constexpr Dest round_if(Source value, bool condition) noexcept
 	{
 		return static_cast<Dest>(condition ? std::round(value) : value);
 	}
@@ -158,7 +159,7 @@ namespace pollux::math
     POLLUX_MATH_CONSTINIT auto only_ret = [](const auto& value) { return value; };
 
     [[nodiscard]]
-    POLLUX_MATH_CONSTEXPR inline float inv_sqrt(float number) noexcept
+    POLLUX_MATH_CONSTEXPR float inv_sqrt(float number) noexcept
     {
         using u32 = uint32_t;
         using f32 = float;
@@ -183,7 +184,7 @@ namespace pollux::math
     }
 
     [[nodiscard]] 
-    POLLUX_MATH_CONSTEXPR inline double inv_sqrt(double number) noexcept
+    POLLUX_MATH_CONSTEXPR double inv_sqrt(double number) noexcept
     {
         using u64 = uint64_t;
         using f64 = double;
@@ -280,7 +281,7 @@ namespace pollux::math
         template <typename Iter, 
                   typename = std::enable_if_t<detail::is_forward_iterator_v<Iter>>>
     #endif
-        constexpr inline vec(Iter first, Iter last)
+        constexpr vec(Iter first, Iter last)
         {
             std::copy(first, last, begin());
         }
@@ -296,7 +297,7 @@ namespace pollux::math
                   typename U, size_t M,
                   typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
     #endif
-        explicit constexpr inline vec(const ArrayType<U, M>& arr)
+        explicit constexpr vec(const ArrayType<U, M>& arr)
             : vec(std::begin(arr), std::end(arr))
         {
         }
@@ -308,7 +309,7 @@ namespace pollux::math
         template <typename U, size_t M, 
                   typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
     #endif
-        explicit constexpr inline vec(const U (&arr)[M])
+        explicit constexpr vec(const U (&arr)[M])
             : vec(std::begin(arr), std::end(arr))
         {
         }
@@ -331,7 +332,7 @@ namespace pollux::math
         {
         }
 
-        constexpr inline vec(const vec& u, const vec& v)
+        constexpr vec(const vec& u, const vec& v)
         {
             *this = v - u;
         }
@@ -349,7 +350,7 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-        constexpr inline auto& cross(const vec& v) noexcept
+        constexpr auto& cross(const vec& v) noexcept
         {
             static_assert(N == size_type{3},
                           "The cross product is only valid for three-dimensional vectors");
@@ -365,9 +366,21 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-        constexpr inline value_type dot(const vec& v) const noexcept
+        constexpr value_type dot(const vec& v) const noexcept
         {
             return std::inner_product(v.cbegin(), v.cend(), v.cbegin(), T{0});
+        }
+
+        constexpr auto& lerp(const vec& v, const vec& u, value_type t) noexcept
+        {
+            return *this = v + ((u - v) * t);
+        }
+
+        constexpr vec operator- () const noexcept
+        {
+            vec temp;
+            std::transform(begin(), end(), temp.begin(), std::negate<>{});
+            return temp;
         }
 
         constexpr vec& operator+= (const vec& v) & noexcept
@@ -401,7 +414,7 @@ namespace pollux::math
         }
 
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
-        constexpr inline auto& norm(InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
+        constexpr auto& norm(InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
         {
             using FP = std::conditional_t<std::is_floating_point_v<T>, T, double>;
             
@@ -422,19 +435,19 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-        constexpr inline value_type dist(const vec& v) const noexcept
+        constexpr value_type dist(const vec& v) const noexcept
         {
             return vec{ *this, v }.length();
         }
 
         [[nodiscard]]
-        constexpr inline std::size_t size() const noexcept
+        constexpr std::size_t size() const noexcept
         {
             return N;
         }
 
         [[nodiscard]]
-        constexpr inline bool is_orthogonal_with(const vec& vector) const noexcept
+        constexpr bool is_orthogonal_with(const vec& vector) const noexcept
         {
             return !(*this * vector);
         }
@@ -445,7 +458,7 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-        constexpr inline bool is_normalized() const noexcept(noexcept(length()))
+        constexpr bool is_normalized() const noexcept(noexcept(length()))
         {
             using F = std::conditional_t<std::is_floating_point_v<T>, T, double>;
             return detail::is_approximately_eq(static_cast<F>(length()), F{1});
@@ -453,18 +466,18 @@ namespace pollux::math
 
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
         [[nodiscard]]
-        constexpr inline auto& scale(T factor, InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
+        constexpr auto& scale(T factor, InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
         {
             return norm(std::move(inv_sqrt_fn)) *= factor;
         }
 
         [[nodiscard]]
-        constexpr inline vec clone() const noexcept
+        constexpr vec clone() const noexcept
         {
             return *this;
         }
 
-        constexpr inline auto& clear() noexcept
+        constexpr auto& clear() noexcept
         {
             components.fill(value_type{});
             return *this;
@@ -554,11 +567,11 @@ namespace pollux::math
             return components.crend();
         }
 
-        friend std::ostream& operator<< (std::ostream& os, const vec& v)
+        friend constexpr std::ostream& operator<< (std::ostream& os, const vec& v)
         {
             os << "vec<" << N << ", " << detail::name_of<T> << ">: (";
 
-			size_type n{ N - 1 };
+			constexpr size_type n{ N - 1 };
             for (size_type i{}; i < n; ++i)
                 os << v[i] << ", ";
 
@@ -566,7 +579,7 @@ namespace pollux::math
             return os;
         }
 
-        constexpr inline operator std::array<T, N>() const noexcept 
+        constexpr operator std::array<T, N>() const noexcept 
         { 
             return components; 
         }
@@ -574,7 +587,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator+ (const vec<N, T>& u, T n) noexcept
+    constexpr auto operator+ (const vec<N, T>& u, T n) noexcept
     {
         vec temp(u);
         std::transform(u.begin(), u.end(), temp.begin(), 
@@ -584,14 +597,14 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator+ (T n, const vec<N, T>& u) noexcept
+    constexpr auto operator+ (T n, const vec<N, T>& u) noexcept
     {
         return u + n;
     }
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator+ (const vec<N, T>& u, const vec<N, T>& v) noexcept
+    constexpr auto operator+ (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         vec<N, T> temp;
         std::transform(u.cbegin(), u.cend(), v.cbegin(), temp.begin(), std::plus<>{});
@@ -600,7 +613,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator- (const vec<N, T>& u, T n) noexcept
+    constexpr auto operator- (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp;
         std::transform(u.cbegin(), u.cend(), temp.begin(), 
@@ -610,7 +623,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator- (const vec<N, T>& u, const vec<N, T>& v) noexcept
+    constexpr auto operator- (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         vec<N, T> temp;
         std::transform(u.cbegin(), u.cend(), v.cbegin(), temp.begin(), std::minus<>{});
@@ -619,7 +632,7 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator* (const vec<N, T>& u, T n) noexcept
+    constexpr auto operator* (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp(u);
         std::transform(u.cbegin(), u.cend(), temp.begin(), 
@@ -629,21 +642,21 @@ namespace pollux::math
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator* (T n, const vec<N, T>& u) noexcept
+    constexpr auto operator* (T n, const vec<N, T>& u) noexcept
     {
         return u * n;
     }
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator* (const vec<N, T>& u, const vec<N, T>& v) noexcept
+    constexpr auto operator* (const vec<N, T>& u, const vec<N, T>& v) noexcept
     {
         return u.dot(v);
     }
 
     template <size_t N, typename T>
     [[nodiscard]]
-    constexpr inline auto operator/ (const vec<N, T>& u, T n) noexcept
+    constexpr auto operator/ (const vec<N, T>& u, T n) noexcept
     {
         vec<N, T> temp(u);
         std::transform(u.cbegin(), u.cend(), temp.begin(), 
@@ -653,19 +666,19 @@ namespace pollux::math
     }
 
     template <size_t N, typename T>
-    constexpr inline bool operator== (const vec<N, T>& u, const vec<N, T>& v)
+    constexpr bool operator== (const vec<N, T>& u, const vec<N, T>& v)
     {
         return u.components == v.components;
     }
 
     template <size_t N, typename T>
-    constexpr inline bool operator!= (const vec<N, T>& u, const vec<N, T>& v)
+    constexpr bool operator!= (const vec<N, T>& u, const vec<N, T>& v)
     {
         return !(u == v);
     }
 
     template <size_t N, typename T>
-    constexpr inline void swap(vec<N, T>& first, vec<N, T>& second) noexcept(noexcept(first.swap(second)))
+    constexpr void swap(vec<N, T>& first, vec<N, T>& second) noexcept(noexcept(first.swap(second)))
     {
         first.swap(second);
     }
