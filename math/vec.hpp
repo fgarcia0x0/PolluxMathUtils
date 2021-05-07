@@ -341,14 +341,17 @@ namespace pollux::math
         constexpr value_type length(SquareRootFn&& sqrt_fn = {}) const noexcept
         {
             using F = std::conditional_t<std::is_floating_point_v<T>, T, double>;
-            T result{ (*this) * (*this) };
-            return static_cast<T>(sqrt_fn(static_cast<F>(result)));
+            
+			T result{ (*this) * (*this) };
+			F squared = sqrt_fn(static_cast<F>(result));
+
+            return detail::round_if<value_type>(squared, !std::is_floating_point_v<value_type>);
         }
 
         [[nodiscard]]
         constexpr inline auto& cross(const vec& v) noexcept
         {
-            static_assert(N == size_type{3}, 
+            static_assert(N == size_type{3},
                           "The cross product is only valid for three-dimensional vectors");
 
             const auto [u1, u2, u3] = components;
@@ -407,7 +410,7 @@ namespace pollux::math
             
 			if (len > T{})
 			{
-				auto value = detail::round_if<value_type>(
+				value_type value = detail::round_if<value_type>(
 					inv_sqrt_fn(static_cast<FP>(len)),
 					!std::is_floating_point_v<value_type>
 				);
@@ -431,9 +434,9 @@ namespace pollux::math
         }
 
         [[nodiscard]]
-        constexpr inline bool is_orthogonal_with(const vec& vec) const noexcept
+        constexpr inline bool is_orthogonal_with(const vec& vector) const noexcept
         {
-            return !(*this * vec);
+            return !(*this * vector);
         }
 
         constexpr void swap(vec& other) noexcept(noexcept(components.swap(other.components)))
