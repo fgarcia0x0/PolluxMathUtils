@@ -336,4 +336,6 @@ ASALocalRun/
 /.vs
 /.vscode
 *.json
+/build
+CMakeLists.txt
 math/test.cpp
