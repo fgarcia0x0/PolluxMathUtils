@@ -336,3 +336,4 @@ ASALocalRun/
 /.vs
 /.vscode
 *.json
+math/test.cpp
