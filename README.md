@@ -17,7 +17,7 @@ using namespace pollux::math::defs;
 
 int main()
 {
-    vec3f u{ 3.0f, 2.0f, 1.0f };
+    vec<3, float> u{ 3.0f, 2.0f, 1.0f }; // or vec3f
     std::cout << u.length() << '\n';
 }
 ```
