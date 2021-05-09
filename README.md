@@ -10,12 +10,14 @@ Every module is a header-only file, so just include the file in your project.
 ## Example
 #### File: test.cpp
 ```cpp
+#include <iostream>
 #include <pollux/math/vec.hpp>
-using namespace pollux::math;
+
+using namespace pollux::math::defs;
 
 int main()
 {
-    vec3f u{ 3.f, 2.f, 1.f };
+    vec3f u{ 3.0f, 2.0f, 1.0f };
     std::cout << u.length() << '\n';
 }
 ```
@@ -44,3 +46,4 @@ g++ -Wall -Wpedantic -O2 -std=c++17 test.cpp -o test.exe
 - clone
 - clear
 - Access individual elements
+- linear interpolation (lerp)
