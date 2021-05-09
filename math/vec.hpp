@@ -1,3 +1,9 @@
+/*******************************************************************************
+ * This file is part of the "https://github.com/fgarcia0x0/PolluxMathUtils"
+ * For conditions of distribution and use, see copyright notice in LICENSE
+ * Copyright (C) 2021, by Felipe Garcia (felipegarcia1402@gmail.com)
+ ******************************************************************************/
+
 #ifndef POLLUX_MATH_VECTOR_HPP
 #define POLLUX_MATH_VECTOR_HPP
 
@@ -99,10 +105,13 @@ namespace pollux::math::detail
     POLLUX_MATH_CONCEPT all_same_v = std::conjunction_v<std::is_same<T, Rest>...>;
 
     template <typename T, typename U>
-    POLLUX_MATH_CONCEPT is_same_v = std::is_same<T, U>::value_type;
+    POLLUX_MATH_CONCEPT is_same_v = std::is_same_v<T, U>;
 
     template <typename T, typename... Rest>
     POLLUX_MATH_CONCEPT all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
+
+	template <typename T>
+	using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
     template <typename Fp>
     constexpr bool is_approximately_eq(Fp a, Fp b, Fp tolerance = std::numeric_limits<Fp>::epsilon())
@@ -132,29 +141,32 @@ namespace pollux::math::detail
 
 namespace pollux::math
 {
-    template <std::size_t N, typename T>
-    struct vec;
+	template <std::size_t N, typename T>
+	struct vec;
 
-    using vec2i   = vec<2, int32_t>;
-    using vec2u   = vec<2, uint32_t>;
-    using vec2i64 = vec<2, int64_t>;
-    using vec2u64 = vec<2, uint64_t>;
-    using vec2f   = vec<2, float>;
-    using vec2d   = vec<2, double>;
+    inline namespace defs
+    {
+        using vec2i   = vec<2, int32_t>;
+        using vec2u   = vec<2, uint32_t>;
+        using vec2i64 = vec<2, int64_t>;
+        using vec2u64 = vec<2, uint64_t>;
+        using vec2f   = vec<2, float>;
+        using vec2d   = vec<2, double>;
 
-    using vec3i   = vec<3, int32_t>;
-    using vec3u   = vec<3, uint32_t>;
-    using vec3i64 = vec<3, int64_t>;
-    using vec3u64 = vec<3, uint64_t>;
-    using vec3f   = vec<3, float>;
-    using vec3d   = vec<3, double>;
+        using vec3i   = vec<3, int32_t>;
+        using vec3u   = vec<3, uint32_t>;
+        using vec3i64 = vec<3, int64_t>;
+        using vec3u64 = vec<3, uint64_t>;
+        using vec3f   = vec<3, float>;
+        using vec3d   = vec<3, double>;
 
-    using vec4i   = vec<4, int32_t>;
-    using vec4u   = vec<4, uint32_t>;
-    using vec4i64 = vec<4, int64_t>;
-    using vec4u64 = vec<4, uint64_t>;
-    using vec4f   = vec<4, float>;
-    using vec4d   = vec<4, double>;
+        using vec4i   = vec<4, int32_t>;
+        using vec4u   = vec<4, uint32_t>;
+        using vec4i64 = vec<4, int64_t>;
+        using vec4u64 = vec<4, uint64_t>;
+        using vec4f   = vec<4, float>;
+        using vec4d   = vec<4, double>;
+    }
 
     POLLUX_MATH_CONSTINIT auto only_ret = [](const auto& value) { return value; };
 
@@ -263,7 +275,7 @@ namespace pollux::math
     struct vec
     {
         using this_type         = vec;
-        using value_type        = T;
+        using value_type        = detail::remove_cvref_t<T>;
         using size_type         = std::size_t;
         using reference         = value_type&;
         using const_reference   = const value_type&;
@@ -283,7 +295,14 @@ namespace pollux::math
     #endif
         constexpr vec(Iter first, Iter last)
         {
-            std::copy(first, last, begin());
+			using iter_type = typename std::iterator_traits<detail::remove_cvref_t<Iter>>::value_type;
+			using diff_type = typename std::iterator_traits<detail::remove_cvref_t<Iter>>::difference_type;
+
+			static_assert(detail::is_same_v<iter_type, value_type>,
+						  "iterator value type mismatch with vector type");
+			
+			assert(std::distance(first, last) == diff_type(N));
+			std::copy(first, last, begin());
         }
 
     #ifdef __cpp_lib_concepts
@@ -332,7 +351,7 @@ namespace pollux::math
         {
         }
 
-        constexpr vec(const vec& u, const vec& v)
+        constexpr vec(const vec& u, const vec& v) noexcept
         {
             *this = v - u;
         }
@@ -341,12 +360,15 @@ namespace pollux::math
         [[nodiscard]]
         constexpr value_type length(SquareRootFn&& sqrt_fn = {}) const noexcept
         {
-            using F = std::conditional_t<std::is_floating_point_v<T>, T, double>;
+            using F = std::conditional_t<std::is_floating_point_v<value_type>, 
+										 value_type, double>;
             
-			T result{ (*this) * (*this) };
+			value_type result{ (*this) * (*this) };
 			F squared = sqrt_fn(static_cast<F>(result));
 
-            return detail::round_if<value_type>(squared, !std::is_floating_point_v<value_type>);
+            return detail::round_if<value_type>(
+				squared, !std::is_floating_point_v<value_type>
+			);
         }
 
         [[nodiscard]]
@@ -368,7 +390,7 @@ namespace pollux::math
         [[nodiscard]]
         constexpr value_type dot(const vec& v) const noexcept
         {
-            return std::inner_product(v.cbegin(), v.cend(), v.cbegin(), T{0});
+            return std::inner_product(v.cbegin(), v.cend(), v.cbegin(), value_type{0});
         }
 
         constexpr auto& lerp(const vec& v, const vec& u, value_type t) noexcept
@@ -379,7 +401,7 @@ namespace pollux::math
         constexpr vec operator- () const noexcept
         {
             vec temp;
-            std::transform(begin(), end(), temp.begin(), std::negate<>{});
+            std::transform(cbegin(), cend(), temp.begin(), std::negate<>{});
             return temp;
         }
 
@@ -416,12 +438,13 @@ namespace pollux::math
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
         constexpr auto& norm(InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
         {
-            using FP = std::conditional_t<std::is_floating_point_v<T>, T, double>;
+            using FP = std::conditional_t<std::is_floating_point_v<value_type>, 
+										  value_type, double>;
             
             // ||v||^2 == v * v
-            T len{ (*this) * (*this) };
+            value_type len{ (*this) * (*this) };
             
-			if (len > T{})
+			if (len > value_type{})
 			{
 				value_type value = detail::round_if<value_type>(
 					inv_sqrt_fn(static_cast<FP>(len)),
@@ -460,13 +483,15 @@ namespace pollux::math
         [[nodiscard]]
         constexpr bool is_normalized() const noexcept(noexcept(length()))
         {
-            using F = std::conditional_t<std::is_floating_point_v<T>, T, double>;
+            using F = std::conditional_t<std::is_floating_point_v<value_type>, 
+										 value_type, double>;
+
             return detail::is_approximately_eq(static_cast<F>(length()), F{1});
         }
 
         template <typename InverseSquareRootFn = inverse_square_root_functor<>>
         [[nodiscard]]
-        constexpr auto& scale(T factor, InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
+        constexpr auto& scale(value_type factor, InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
         {
             return norm(std::move(inv_sqrt_fn)) *= factor;
         }
