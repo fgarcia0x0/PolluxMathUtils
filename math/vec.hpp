@@ -450,7 +450,7 @@ namespace pollux::math
 				FP inv_len = std::forward<RSqrtFn>(rsqrt_fn)(static_cast<FP>(len));
 				constexpr bool cond = !std::is_floating_point_v<value_type>;
 
-				for (auto&& component : (*this))
+				for (const value_type& component : (*this))
 					component = detail::round_if<value_type>(component * inv_len, cond);
 			}
 
@@ -581,7 +581,7 @@ namespace pollux::math
         constexpr vec& clamp(const value_type& min, const value_type& max,
                              ClampFn&& clamp_fn = {}) noexcept
         {
-			for (auto&& value : (*this))
+			for (const value_type& value : (*this))
 				value = clamp_fn(std::move(value), min, max);
 
             return *this;
