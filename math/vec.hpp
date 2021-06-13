@@ -450,7 +450,7 @@ namespace pollux::math
 				FP inv_len = std::forward<RSqrtFn>(rsqrt_fn)(static_cast<FP>(len));
 				constexpr bool cond = !std::is_floating_point_v<value_type>;
 
-				for (const value_type& component : (*this))
+				for (value_type& component : (*this))
 					component = detail::round_if<value_type>(component * inv_len, cond);
 			}
 
@@ -794,7 +794,7 @@ namespace pollux::math
          *
          * @return     String representation of the object.
          */
-		std::string to_str() const noexcept
+		std::string to_str() const
 		{
 			const char* fmt = "vec<%zu, %s>: (";
 			std::size_t needed_size = std::snprintf(nullptr, 0, fmt, N, detail::name_of<T>);
