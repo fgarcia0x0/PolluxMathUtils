@@ -15,47 +15,10 @@
 #include <numeric>
 #include <cassert>
 #include <type_traits>
+#include <string>
 #include <cstring>
 #include <algorithm>
 #include <functional>
-
-/*
- * std::fma is constant expression in:
- *  - since GCC 8.1 support constexpr fma
- *  - since Clang 12.0 support constexpr fma
- */ 
-
-#ifndef POLLUX_MATH_CONSTEXPR
-    #define GCC_MAJOR   (__GNUC__)
-    #define GCC_MINOR   (__GNUC_MINOR__)
-    #define CLANG_MAJOR (__clang_major__)
-
-    #define CLANG_SIG ((__GNUC__) && (__clang__))
-    #define GCC_SIG ((__GNUC__) && (!CLANG_SIG))
-
-    #if (CLANG_SIG && (CLANG_MAJOR >= 12)) || \
-         GCC_SIG && (GCC_MAJOR > 8 || (GCC_MAJOR == 8 && GCC_MINOR >= 1))
-        #define POLLUX_MATH_CONSTEXPR constexpr
-    #else
-        #define POLLUX_MATH_CONSTEXPR inline
-    #endif
-#endif
-
-#ifndef POLLUX_MATH_CONSTINIT
-    #ifdef __cpp_constinit
-        #define POLLUX_MATH_CONSTINIT constinit
-    #else
-        #define POLLUX_MATH_CONSTINIT constexpr inline
-    #endif
-#endif
-
-#ifndef POLLUX_MATH_CONCEPT
-    #ifdef __cpp_lib_concepts
-        #define POLLUX_MATH_CONCEPT concept
-    #else
-        #define POLLUX_MATH_CONCEPT constexpr inline bool
-    #endif
-#endif
 
 namespace pollux::math::detail
 {
@@ -99,28 +62,51 @@ namespace pollux::math::detail
     #endif
 
     template <typename T, typename... U>
-    POLLUX_MATH_CONCEPT is_any_v = std::disjunction_v<std::is_same<T, U>...>;
+    constexpr inline bool is_any_v = std::disjunction_v<std::is_same<T, U>...>;
 
     template <typename T, typename... Rest>
-    POLLUX_MATH_CONCEPT all_same_v = std::conjunction_v<std::is_same<T, Rest>...>;
+    constexpr inline bool all_same_v = std::conjunction_v<std::is_same<T, Rest>...>;
 
     template <typename T, typename U>
-    POLLUX_MATH_CONCEPT is_same_v = std::is_same_v<T, U>;
+    constexpr inline bool is_same_v = std::is_same_v<T, U>;
 
     template <typename T, typename... Rest>
-    POLLUX_MATH_CONCEPT all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
+    constexpr inline bool all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
 
-	template <typename T>
-	using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
-
+    /**
+     * @brief      Verifies that two floating point values are equals with a
+     *             certain tolerance (rounding error).
+	 * 
+	 * @pre The value of a and b are not NAN'S (Not a Number)
+	 * @see https://en.wikipedia.org/wiki/NaN
+     *
+     * @param[in]  a          The first value
+     * @param[in]  b          The second value
+     * @param[in]  tolerance  The rounding error tolerance
+     *
+     * @tparam     Fp         Any float-point type such as float, double or long double
+     * @see        https://embeddeduse.com/2019/08/26/qt-compare-two-floats/
+     *
+     * @return     True if equals, false otherwise.
+     */
     template <typename Fp>
     constexpr bool is_approximately_eq(Fp a, Fp b, Fp tolerance = std::numeric_limits<Fp>::epsilon())
     {
-        static_assert(std::is_floating_point_v<Fp>, "only floating-point types are supported");
-        
-        Fp diff = std::abs(a - b);
-        return (diff <= tolerance) || 
-               (diff < std::max(std::abs(a), std::abs(b)) * tolerance); 
+        static_assert(std::is_floating_point_v<Fp>, 
+					  "only floating-point types are supported");
+
+        /**
+		 * 							INFO
+         * If two numbers are very close and, hence, the absolute value of their 
+         * difference is smaller than epsilon, then these two numbers should be 
+         * considered equal.
+		 * 
+         */
+        const Fp diff = std::abs(a - b);
+        if (diff <= tolerance)
+            return true;
+
+        return diff <= tolerance * std::max(std::abs(a), std::abs(b));
     }
 
 	template <typename Dest, typename Source>
@@ -128,22 +114,15 @@ namespace pollux::math::detail
 	{
 		return static_cast<Dest>(condition ? std::round(value) : value);
 	}
-
-    template <typename Iter, typename IterCategory>
-    POLLUX_MATH_CONCEPT is_iterator_category = is_same_v<typename std::iterator_traits<Iter>::iterator_category, IterCategory>;
-
-    template <typename Iter>
-    POLLUX_MATH_CONCEPT is_random_access_iterator_v = is_iterator_category<Iter, std::random_access_iterator_tag>;
-
-    template <typename Iter>
-    POLLUX_MATH_CONCEPT is_forward_iterator_v = is_iterator_category<Iter, std::forward_iterator_tag>;
 }
 
 namespace pollux::math
 {
+	// Forward Declarator
 	template <std::size_t N, typename T>
 	struct vec;
 
+	// vector typedef's namespace
     inline namespace defs
     {
         using vec2i   = vec<2, int32_t>;
@@ -168,135 +147,115 @@ namespace pollux::math
         using vec4d   = vec<4, double>;
     }
 
-    POLLUX_MATH_CONSTINIT auto only_ret = [](const auto& value) { return value; };
+	// lambda functor which only returns the passed value
+    static constexpr auto only_ret = [](const auto& value) { return value; };
 
-    [[nodiscard]]
-    POLLUX_MATH_CONSTEXPR float inv_sqrt(float number) noexcept
-    {
-        using u32 = uint32_t;
-        using f32 = float;
-        using detail::bit_cast;
+	/**
+	 * @brief Wrapper functor for square root
+	 */
+	struct sqrt_functor
+	{
+		template <typename T>
+		constexpr T operator()(T value) const noexcept
+		{
+			static_assert(std::is_floating_point_v<T>, 
+					  "The type needs to be a floating point type");
 
-        static_assert(sizeof(f32) == sizeof(u32));
-        static_assert(std::numeric_limits<f32>::is_iec559, "float type requires iec559");
+			return std::sqrt(value);
+		}
+	};
 
-        u32 i = bit_cast<u32>(number) >> u32{1};
-        u32 ii = u32{0x5E5FB414} - i;
-        i = u32{0x5F5FB414} - i;
+	/**
+	 * @brief Wrapper functor for inverse square root (eg: 1 / sqrt(x))
+	 */
+	struct rsqrt_functor
+	{
+		template <typename T>
+		constexpr T operator()(T value) const noexcept
+		{
+			static_assert(std::is_floating_point_v<T>,
+					  	  "The type needs to be a floating point type");
 
-        f32 y  = bit_cast<f32>(i);
-        f32 yy = bit_cast<f32>(std::move(ii));
-        y = yy * (4.76410007f - number * y * y);
-        
-        f32 c{ number * y };
-        f32 r{ std::fmaf(y, c, -1.0f) };
+			return static_cast<T>(1.0) / std::sqrt(value);
+		}
+	};
 
-        c =  std::fmaf(0.374000013f, r, -0.5f);
-        return std::fmaf(r * y, c, y);
-    }
-
-    [[nodiscard]] 
-    POLLUX_MATH_CONSTEXPR double inv_sqrt(double number) noexcept
-    {
-        using u64 = uint64_t;
-        using f64 = double;
-        using detail::bit_cast;
-
-        static_assert(sizeof(u64) == sizeof(f64));
-
-        u64 i = bit_cast<u64>(number);
-        u64 ix = i - 0x8010000000000000;
-        i >>= 1ULL;
-
-        u64 ii = 0x5FCBF6D9DB9A45CD - i;
-        i = 0x5FEBF6D9DB9A45CD - i;
-
-        f64 y  = bit_cast<f64>(i);
-        y = bit_cast<f64>(std::move(ii)) * (4.7642670025852993 - number * y * y);
-
-        f64 t = std::fma(bit_cast<f64>(std::move(ix)), 
-                         y * y, 0.50000031697852854);
-
-        y = std::fma(y, std::move(t), y);
-
-        f64 r = std::fma(y, number * y, -1.0);
-        y = std::fma(r * y, std::fma(0.375, std::move(r), -0.5), y);
-
-        return y;
-    }
-
-    template <typename T = void>
-    struct square_root_functor
-    {
-        [[nodiscard]]
-        constexpr T operator()(T value) const noexcept 
-        { 
-            static_assert(std::is_floating_point_v<T>, "The type needs to be a floating point type");
-            return std::sqrt(value); 
-        }
-    };
-
-    template<>
-    struct square_root_functor<void>
+	/**
+	 * @brief Wrapper functor clamp function
+	 */
+    struct clamp_functor
     {
         template <typename T>
-        [[nodiscard]]
-        constexpr T operator()(T value) const noexcept 
-        { 
-            static_assert(std::is_floating_point_v<T>, "The type needs to be a floating point type");
-            return std::sqrt(value); 
+        constexpr const T& operator()(const T& value, const T& min, const T& max) const noexcept
+        {
+            return std::clamp(value, min, max);
         }
     };
 
-    template <typename T = void>
-    struct inverse_square_root_functor
-    {
-        [[nodiscard]]
-        constexpr T operator()(T value) const noexcept 
-        { 
-            static_assert(std::is_floating_point_v<T>, "The type needs to be a floating point type");
-            return inv_sqrt(value); 
-        }
-    };
-
-    template<>
-    struct inverse_square_root_functor<void>
-    {
-        template <typename T>
-        [[nodiscard]]
-        constexpr T operator()(T value) const noexcept 
-        { 
-            static_assert(std::is_floating_point_v<T>, "The type needs to be a floating point type");
-            return inv_sqrt(value); 
-        }
-    };
-
+    /**
+     * @brief      An N-dimensional math vector container
+     *
+     * @tparam     N     represents the number of vector dimensions
+     * @tparam     T     represents the type of vector components
+     */
     template <std::size_t N, typename T>
     struct vec
     {
+		/* Type Assertions */
+		static_assert(!std::is_reference_v<T>, "invalid type for vector element");
+		static_assert(!std::is_pointer_v<T>,   "invalid type for vector element");
+
+		/*------------------- Type Definitions -----------------------*/
         using this_type         = vec;
-        using value_type        = detail::remove_cvref_t<T>;
+        using value_type        = std::decay_t<T>;
         using size_type         = std::size_t;
         using reference         = value_type&;
         using const_reference   = const value_type&;
         using pointer           = value_type*;
         using const_pointer     = const value_type*;
         using iterator          = typename std::array<T, N>::iterator;
+		/*------------------------------------------------------------*/
 
+		/**** Vector Components *****/
         std::array<T, N> components;
 
-        constexpr vec(const vec&) = default;
+        /**
+         * @brief Adquire the normal vector
+         * @param identity_value the identity value (by default is one)
+         * @return The normal vector
+         */
+        static constexpr vec normal(const value_type& identity_value = value_type(1)) noexcept
+        {
+        	vec temp{ };
+        	temp[N - 1] = identity_value;
+        	return temp;
+        }
 
-    #ifdef __cpp_lib_concepts
-        template <std::forward_iterator Iter> 
-    #else
-        template <typename Iter, 
-                  typename = std::enable_if_t<detail::is_forward_iterator_v<Iter>>>
-    #endif
+		/* Default Constructor */
+        constexpr vec() = default;
+
+		/* Default Constructor Assignment */
+        constexpr vec(const vec&) = default;
+		constexpr vec(vec&&) = default;
+
+		/* Default Assignment Operator */
+		vec& operator= (const vec&) = default;
+		vec& operator= (vec&&) = default;
+
+		/**
+         * @brief      Construct vector elements from the [first, last) in such
+         *             a way that the length of the interval is equal's to N
+         *
+         * @param      first  The begin of range of elements
+         * @param      last   The end of range of elements
+         *
+         * @tparam     Iter   The iterator type
+         */
+		template <typename Iter>
         constexpr vec(Iter first, Iter last)
         {
-			using iter_type = typename std::iterator_traits<detail::remove_cvref_t<Iter>>::value_type;
-			using diff_type = typename std::iterator_traits<detail::remove_cvref_t<Iter>>::difference_type;
+			using iter_type = typename std::iterator_traits<std::decay_t<Iter>>::value_type;
+			using diff_type = typename std::iterator_traits<std::decay_t<Iter>>::difference_type;
 
 			static_assert(detail::is_same_v<iter_type, value_type>,
 						  "iterator value type mismatch with vector type");
@@ -305,60 +264,64 @@ namespace pollux::math
 			std::copy(first, last, begin());
         }
 
-    #ifdef __cpp_lib_concepts
-        template <template<typename, size_t> 
-                  typename ArrayType,
-                  typename U, size_t M>
-        requires (detail::is_same_v<T, U> && N == M)
-    #else
-        template <template<typename, size_t> 
-                  typename ArrayType,
-                  typename U, size_t M,
-                  typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
-    #endif
+		/**
+		 * @brief Construct vector from wrapper array type
+		 * @tparam U The type of array
+		 * @tparam M The size of array
+		 * @param arr The input array
+		 */
+		template <template<typename, size_t> typename ArrayType, typename U, size_t M,
+				  typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
         explicit constexpr vec(const ArrayType<U, M>& arr)
             : vec(std::begin(arr), std::end(arr))
         {
         }
 
-    #ifdef __cpp_lib_concepts
-        template <typename U, size_t M>
-        requires (detail::is_same_v<T, U> && N == M)
-    #else
-        template <typename U, size_t M, 
-                  typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
-    #endif
+		/**
+		 * @brief Construct vector from raw array type
+		 * @tparam U The type of array
+		 * @tparam M The size of array
+		 * @param arr The input array
+		 */
+		template <typename U, size_t M,
+				  typename = std::enable_if_t<detail::is_same_v<T, U> && N == M>>
         explicit constexpr vec(const U (&arr)[M])
             : vec(std::begin(arr), std::end(arr))
         {
         }
 
-        /** 
-         * TODO(garcia): enable implicit conversion?
-         * if yes, then:
-         *  detail::all_convertible_v<T, Args...>
-         *  static_cast<T>(args)...
-         */
-    #ifdef __cpp_lib_concepts
-        template <typename... Args> 
-        requires detail::all_same_v<T, Args...>
-    #else
-        template <typename... Args, 
-                  typename = std::enable_if_t<detail::all_same_v<T, Args...>>> 
-    #endif
-        constexpr vec(Args... args)
+		/**
+		 * @brief Construct vector from list of elements of type T and size N
+		 */
+		template <typename... Args,
+				  typename = std::enable_if_t<detail::all_same_v<T, Args...>>>
+        explicit constexpr vec(Args&&... args) noexcept
             : components{{ std::forward<T>(args)... }}
         {
         }
 
+		/**
+		 * @brief Construct vector follow the formula: w = (v - u)
+		 */
         constexpr vec(const vec& u, const vec& v) noexcept
         {
             *this = v - u;
         }
 
-        template <typename SquareRootFn = square_root_functor<>>
+		/**
+         * @brief      Calculate the length (or magnitude) of this vector
+         *
+         * @param      sqrt_fn  Optionally customized square root
+         *                      function/functor
+         *
+         * @tparam     SqrtFn   The type of function/functor implementation of
+         *                      square root
+         *
+         * @return     The length of vector
+         */
+		template <typename SqrtFn = sqrt_functor>
         [[nodiscard]]
-        constexpr value_type length(SquareRootFn&& sqrt_fn = {}) const noexcept
+        constexpr value_type length(SqrtFn&& sqrt_fn = {}) const noexcept
         {
             using F = std::conditional_t<std::is_floating_point_v<value_type>, 
 										 value_type, double>;
@@ -371,8 +334,15 @@ namespace pollux::math
 			);
         }
 
+        /**
+         * @brief      Perform the cross product
+         *
+         * @param[in]  v The other vector
+         *
+         * @return     A new vector of cross product vector with v
+         */
         [[nodiscard]]
-        constexpr auto& cross(const vec& v) noexcept
+        constexpr vec& cross(const vec& v) noexcept
         {
             static_assert(N == size_type{3},
                           "The cross product is only valid for three-dimensional vectors");
@@ -387,16 +357,35 @@ namespace pollux::math
             return *this;
         }
 
+        /**
+         * @brief      Calculate the dot product
+         *
+         * @param[in]  v The other vector
+         *
+         * @return     The result value of dot product 
+         */
         [[nodiscard]]
         constexpr value_type dot(const vec& v) const noexcept
         {
-            return std::inner_product(v.cbegin(), v.cend(), v.cbegin(), value_type{0});
+            return std::inner_product(cbegin(), cend(), v.cbegin(), value_type{0});
         }
 
-        constexpr auto& lerp(const vec& v, const vec& u, value_type t) noexcept
+        /**
+         * @brief      Compute v + t(u - v) i.e. the linear interpolation
+         *             between v and u for the parameter t
+         *
+         * @param[in]  v     The first vector
+         * @param[in]  u     The second vector
+         * @param[in]  t     The tolerance value
+         *
+         * @return     The vector wich result of linear interpolation
+         */
+        constexpr vec& lerp(const vec& v, const vec& u, value_type t) noexcept
         {
-            return *this = v + ((u - v) * t);
+            return *this = v + (t * (u - v));
         }
+
+        /***** Vector Operators *****/
 
         constexpr vec operator- () const noexcept
         {
@@ -407,36 +396,48 @@ namespace pollux::math
 
         constexpr vec& operator+= (const vec& v) & noexcept
         {
-            return *this = *this + v;
+            return *this = std::move(*this) + v;
         }
 
         constexpr vec& operator+= (value_type value) & noexcept
         {
-            return *this = *this + value;
+            return *this = std::move(*this) + value;
         }
 
         constexpr vec& operator-= (const vec& v) & noexcept
         {
-            return *this = *this - v;
+            return *this = std::move(*this) - v;
         }
 
         constexpr vec& operator-= (value_type value) & noexcept
         {
-            return *this = *this - value;
+            return *this = std::move(*this) - value;
         }
         
         constexpr vec& operator*= (value_type n) & noexcept
         {
-            return *this = *this * n;
+            return *this = std::move(*this) * n;
         }
 
         constexpr vec& operator/= (value_type n) & noexcept
         {
-            return *this = *this / n;
+            return *this = std::move(*this) / n;
         }
 
-        template <typename InverseSquareRootFn = inverse_square_root_functor<>>
-        constexpr auto& norm(InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
+        /*********************************************/
+
+        /**
+         * @brief      Perform vector normalization.
+         *
+         * @param      rsqrt_fn  Optionally customized inverse square root function/functor
+         *
+         * @tparam     RSqrtFn   The type of function/functor implementation of inverse square root
+         *
+         * @return     A reference for this instance
+         */
+		template <typename RSqrtFn = rsqrt_functor>
+        [[maybe_unused]]
+        constexpr vec& norm(RSqrtFn&& rsqrt_fn = {}) noexcept
         {
             using FP = std::conditional_t<std::is_floating_point_v<value_type>, 
 										  value_type, double>;
@@ -446,40 +447,70 @@ namespace pollux::math
             
 			if (len > value_type{})
 			{
-				value_type value = detail::round_if<value_type>(
-					inv_sqrt_fn(static_cast<FP>(len)),
-					!std::is_floating_point_v<value_type>
-				);
+				FP inv_len = std::forward<RSqrtFn>(rsqrt_fn)(static_cast<FP>(len));
+				constexpr bool cond = !std::is_floating_point_v<value_type>;
 
-				(*this) *= std::move(value);
+				for (auto&& component : (*this))
+					component = detail::round_if<value_type>(component * inv_len, cond);
 			}
 
             return *this;
         }
 
+        /**
+         * @brief      Calculate the distance of this vector in relation to the other
+         *
+         * @param[in]  v  The other vector
+         *
+         * @return     The value of distance
+         */
         [[nodiscard]]
         constexpr value_type dist(const vec& v) const noexcept
         {
             return vec{ *this, v }.length();
         }
 
+        /**
+         * @brief      Return the number of dimensions of vector
+         *
+         * @return     The number of dimensions of vector
+         */
         [[nodiscard]]
         constexpr std::size_t size() const noexcept
         {
             return N;
         }
 
+        /**
+         * @brief      Determines whether the specified vector is orthogonal
+         *             with other vector.
+         *
+         * @param[in]  other  The other vector
+         *
+         * @return     True if the specified vector is orthogonal with other,
+         *             False otherwise.
+         */
         [[nodiscard]]
-        constexpr bool is_orthogonal_with(const vec& vector) const noexcept
+        constexpr bool is_orthogonal_with(const vec& other) const noexcept
         {
-            return !(*this * vector);
+            return !(*this * other);
         }
 
+        /**
+         * @brief      Swap this vector with another
+         *
+         * @param      other  The other vector
+         */
         constexpr void swap(vec& other) noexcept(noexcept(components.swap(other.components)))
         {
             components.swap(other.components);
         }
 
+        /**
+         * @brief      Verify if vector is normalized
+         *
+         * @return     True if normalized, False otherwise.
+         */
         [[nodiscard]]
         constexpr bool is_normalized() const noexcept(noexcept(length()))
         {
@@ -489,23 +520,123 @@ namespace pollux::math
             return detail::is_approximately_eq(static_cast<F>(length()), F{1});
         }
 
-        template <typename InverseSquareRootFn = inverse_square_root_functor<>>
+        /**
+         * @brief      Scale this vector from a scalar value called factor
+         *
+         * @param[in]  factor    The factor to be scaled
+         * @param      rsqrt_fn  Optionally customized inverse square root
+         *                       function/functor
+         *
+         * @tparam     RSqrtFn   The type of function/functor implementation of
+         *                       inverse square root
+         *
+         * @return     A reference for this instance
+         */
+		template <typename RSqrtFn = rsqrt_functor>
         [[nodiscard]]
-        constexpr auto& scale(value_type factor, InverseSquareRootFn&& inv_sqrt_fn = {}) noexcept
+        constexpr vec& scale(value_type factor, RSqrtFn&& rsqrt_fn = {}) noexcept
         {
-            return norm(std::move(inv_sqrt_fn)) *= factor;
+            return norm(std::move(rsqrt_fn)) *= factor;
         }
 
+
+        /**
+         * @brief      Creates a new instance of the object with same properties
+         *             than original.
+         *
+         * @return     Copy of this object.
+         */
         [[nodiscard]]
         constexpr vec clone() const noexcept
         {
             return *this;
         }
 
-        constexpr auto& clear() noexcept
+        /**
+         * @brief      Clear vector with the given value.
+         *
+         * @param[in]  value  The value
+         *
+         * @return     A reference for this instance
+         */
+		constexpr vec& clear(const value_type& value = value_type(0)) noexcept
         {
-            components.fill(value_type{});
+            components.fill(value);
             return *this;
+        }
+
+        /**
+         * @brief      Clamps a value between an upper and lower bound.
+         *
+         * @param[in]  min       The minimum value
+         * @param[in]  max       The maximum value
+         * @param      clamp_fn  Optionally customized clamp function/functor
+         *
+         * @tparam     ClampFn   The type of function/functor implementation of
+         *                       clamp
+         *
+         * @return     A reference for this instance
+         */
+		template <typename ClampFn = clamp_functor>
+        constexpr vec& clamp(const value_type& min, const value_type& max,
+                             ClampFn&& clamp_fn = {}) noexcept
+        {
+			for (auto&& value : (*this))
+				value = clamp_fn(std::move(value), min, max);
+
+            return *this;
+        }
+
+        /**
+         * @brief      Clamps a value between an upper and lower bound.
+         *
+         * @param[in]  range     The range vector represent [min, max]
+         * @param      clamp_fn  Optionally customized clamp function/functor
+         *
+         * @tparam     ClampFn   The type of function/functor implementation of clamp
+         *
+         * @return     A reference for this instance
+         */
+		template <typename ClampFn = clamp_functor>
+        constexpr vec& clamp(const vec<2, value_type>& range,
+                             ClampFn&& clamp_fn = {}) noexcept
+        {
+            return clamp(range[0], range[1], std::move(clamp_fn));
+        }
+
+        /**
+         * @brief      Perform fused multiply–add operation
+         *
+         * @param[in]  v1    The first vector
+         * @param[in]  v2    The second vector
+         *
+         * @return     A reference for this instance
+         */
+        constexpr vec& mul_add(const vec& v1, const vec& v2) noexcept
+        {
+            return *this = (std::move(*this) * v1) + v2;
+        }
+
+        /**
+         * @brief      Verifies when two vectors are equal from a certain tolerance
+         *
+         * @param[in]  v  The vector with who will be compared
+         *
+         * @return     True if is equivalent, False otherwise.
+         */
+        template <typename Fp = std::conditional_t<std::is_floating_point_v<value_type>, 
+												   value_type, double>>
+        [[nodiscard]]
+        constexpr bool is_equivalent(const vec& v, 
+									 Fp tolerance = std::numeric_limits<Fp>::epsilon()) const noexcept
+        {
+            using namespace detail;
+
+            bool eq = false;
+            for (size_type i = 0; i < N; ++i)
+                eq |= is_approximately_eq(Fp((*this)[i]), Fp(v[i]));
+
+            return eq;
         }
 
         [[nodiscard]]
@@ -526,82 +657,180 @@ namespace pollux::math
             return components.begin();
         }
 
+        /**
+         * @brief      Returns an immutable iterator pointing to the first
+         *             element in the vector.
+         *
+         * @return     Iterator to beginning
+         */
         [[nodiscard]]
         constexpr auto begin() const noexcept
         {
             return components.begin();
         }
 
+        /**
+         * @brief      Returns an iterator pointing to the last element in the vector.
+         *
+         * @return     Iterator to ending
+         *
+         */
         [[nodiscard]]
         constexpr auto end() noexcept
         {
             return components.end();
         }
 
+        /**
+         * @brief      Returns an immutable iterator pointing to the last
+         *             element in the vector.
+         *
+         * @return     Iterator to ending
+         */
         [[nodiscard]]
         constexpr auto end() const noexcept
         {
             return components.end();
         }
 
+        /**
+         * @brief      Returns an const iterator pointing to the first element
+         *             in the vector.
+         *
+         * @return     Iterator to beginning
+         */
         [[nodiscard]]
         constexpr auto cbegin() const noexcept
         {
             return components.cbegin();
         }
 
+        /**
+         * @brief      Returns an const iterator pointing to the last element
+         *             in the vector.
+         *
+         * @return     Iterator to ending
+         */
         [[nodiscard]]
         constexpr auto cend() const noexcept
         {
             return components.cend();
         }
 
+        /**
+         * @brief      Returns a reverse iterator pointing to the last element
+         *             in this vector.
+         *
+         * @return     reverse iterator to reverse beginning
+         */
         [[nodiscard]]
         constexpr auto rbegin() noexcept
         {
             return components.rbegin();
         }
 
+        /**
+         * @brief      Returns a immutable reverse iterator pointing to the last
+         *             element in this vector.
+         *
+         * @return     reverse iterator to reverse beginning
+         */
         [[nodiscard]]
         constexpr auto rbegin() const noexcept
         {
             return components.rbegin();
         }
 
+        /**
+         * @brief      Returns a reverse iterator pointing to the theoretical
+         *             element preceding the first element in this vector
+         *
+         * @return     reverse iterator to reverse end
+         */
         [[nodiscard]]
         constexpr auto rend() noexcept
         {
             return components.rend();
         }
 
+        /**
+         * @brief      Returns a immutable reverse iterator pointing to the theoretical
+         *             element preceding the first element in this vector
+         *
+         * @return     reverse iterator to reverse end
+         */
         [[nodiscard]]
         constexpr auto rend() const noexcept
         {
             return components.rend();
         }
 
+        /**
+         * @brief      Returns a const reverse iterator pointing to the last
+         *             element in this vector.
+         *
+         * @return     reverse iterator to reverse beginning
+         */
         [[nodiscard]]
         constexpr auto crbegin() const noexcept
         {
             return components.crbegin();
         }
 
+        /**
+         * @brief      Returns a const reverse iterator pointing to the theoretical
+         *             element preceding the first element in this vector
+         *
+         * @return     reverse iterator to reverse end
+         */
         [[nodiscard]]
         constexpr auto crend() const noexcept
         {
             return components.crend();
         }
 
+        /**
+         * @brief      Returns a string representation of the object.
+         *
+         * @return     String representation of the object.
+         */
+		std::string to_str() const noexcept
+		{
+			const char* fmt = "vec<%zu, %s>: (";
+			std::size_t needed_size = std::snprintf(nullptr, 0, fmt, N, detail::name_of<T>);
+
+			assert(needed_size > 0);
+
+			std::string buffer;
+			buffer.resize(needed_size + 1);
+
+			[[maybe_unused]]
+			std::size_t writted_size = std::snprintf(buffer.data(), 
+													 std::min(buffer.capacity() - 1, 
+															  needed_size + 1), 
+													 fmt, N, detail::name_of<T>);
+
+			assert(writted_size && writted_size <= needed_size);
+
+			auto first = cbegin();
+			auto last  = cend() - 1U;
+
+			for (; first != last; ++first)
+			{
+				buffer += std::to_string(*first);
+				buffer.push_back(',');
+				buffer.push_back(' ');
+			}
+
+			buffer += std::to_string(*last);
+			buffer.push_back(')');
+
+			return buffer;
+		}
+
         friend constexpr std::ostream& operator<< (std::ostream& os, const vec& v)
         {
-            os << "vec<" << N << ", " << detail::name_of<T> << ">: (";
-
-			constexpr size_type n{ N - 1 };
-            for (size_type i{}; i < n; ++i)
-                os << v[i] << ", ";
-
-            os << v[N - 1] << ")\n";
-            return os;
+			return (os << v.to_str() << '\n');
         }
 
         constexpr operator std::array<T, N>() const noexcept 
@@ -683,11 +912,8 @@ namespace pollux::math
     [[nodiscard]]
     constexpr auto operator/ (const vec<N, T>& u, T n) noexcept
     {
-        vec<N, T> temp(u);
-        std::transform(u.cbegin(), u.cend(), temp.begin(), 
-                      [n = std::move(n)](const auto& elem) 
-                      { return elem / std::max(n, T{1}); });
-        return temp;
+		assert(n != 0);
+        return u * (T(1.0) / n);
     }
 
     template <size_t N, typename T>
