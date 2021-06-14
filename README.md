@@ -28,8 +28,7 @@ int main()
 g++ -Wall -Wpedantic -O2 -std=c++17 test.cpp -o test.exe
 ```
 
-## Supported Operatations
-### PolluxMathUtils v0.0.1
+## Supported Operations
 - Sum
 - Subtraction
 - Multiplication
@@ -47,3 +46,6 @@ g++ -Wall -Wpedantic -O2 -std=c++17 test.cpp -o test.exe
 - clear
 - Access individual elements
 - linear interpolation (lerp)
+- normal vector
+- to_str
+- is_equivalent
