@@ -224,6 +224,7 @@ namespace pollux::math
          * @param identity_value the identity value (by default is one)
          * @return The normal vector
          */
+		[[nodiscard]]
         static constexpr vec normal(const value_type& identity_value = value_type(1)) noexcept
         {
         	vec temp{ };
@@ -581,7 +582,7 @@ namespace pollux::math
         constexpr vec& clamp(const value_type& min, const value_type& max,
                              ClampFn&& clamp_fn = {}) noexcept
         {
-			for (const value_type& value : (*this))
+			for (value_type& value : (*this))
 				value = clamp_fn(std::move(value), min, max);
 
             return *this;
