@@ -73,6 +73,18 @@ namespace pollux::math::detail
     template <typename T, typename... Rest>
     constexpr inline bool all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
 
+    template <typename T, typename = void>
+    struct is_iterator : std::false_type{};
+
+    template <typename T>
+    struct is_iterator<T, std::void_t<
+        typename std::iterator_traits<T>::iterator_category
+    >> : std::true_type{};
+
+    template <typename Iter>
+    constexpr inline bool is_iterator_v = is_iterator<std::decay_t<Iter>>::value;
+
+
     /**
      * @brief      Verifies that two floating point values are equals with a
      *             certain tolerance (rounding error).
@@ -244,28 +256,6 @@ namespace pollux::math
 		vec& operator= (vec&&) = default;
 
 		/**
-         * @brief      Construct vector elements from the [first, last) in such
-         *             a way that the length of the interval is equal's to N
-         *
-         * @param      first  The begin of range of elements
-         * @param      last   The end of range of elements
-         *
-         * @tparam     Iter   The iterator type
-         */
-		template <typename Iter>
-        constexpr vec(Iter first, Iter last)
-        {
-			using iter_type = typename std::iterator_traits<std::decay_t<Iter>>::value_type;
-			using diff_type = typename std::iterator_traits<std::decay_t<Iter>>::difference_type;
-
-			static_assert(detail::is_same_v<iter_type, value_type>,
-						  "iterator value type mismatch with vector type");
-			
-			assert(std::distance(first, last) == diff_type(N));
-			std::copy(first, last, begin());
-        }
-
-		/**
 		 * @brief Construct vector from wrapper array type
 		 * @tparam U The type of array
 		 * @tparam M The size of array
@@ -295,9 +285,9 @@ namespace pollux::math
 		 * @brief Construct vector from list of elements of type T and size N
 		 */
 		template <typename... Args,
-				  typename = std::enable_if_t<detail::all_same_v<T, Args...>>>
+				  typename = std::enable_if_t<detail::all_convertible_v<T, Args...>>>
         explicit constexpr vec(Args&&... args) noexcept
-            : components{{ std::forward<T>(args)... }}
+            : components{{ static_cast<T>(args)... }}
         {
         }
 
@@ -307,6 +297,28 @@ namespace pollux::math
         constexpr vec(const vec& u, const vec& v) noexcept
         {
             *this = v - u;
+        }
+
+        /**
+         * @brief      Construct vector elements from the [first, last) in such
+         *             a way that the length of the interval is equal's to N
+         *
+         * @param      first  The begin of range of elements
+         * @param      last   The end of range of elements
+         *
+         * @tparam     Iter   The iterator type
+         */
+        template <typename Iter, typename = std::enable_if_t<detail::is_iterator_v<Iter>>>
+        constexpr vec(Iter first, Iter last)
+        {
+            using iter_type = typename std::iterator_traits<std::decay_t<Iter>>::value_type;
+            using diff_type = typename std::iterator_traits<std::decay_t<Iter>>::difference_type;
+
+            static_assert(detail::is_same_v<iter_type, value_type>,
+                          "iterator value type mismatch with vector type");
+            
+            assert(std::distance(first, last) == diff_type(N));
+            std::copy(first, last, begin());
         }
 
 		/**
@@ -562,7 +574,7 @@ namespace pollux::math
          */
 		constexpr vec& clear(const value_type& value = value_type(0)) noexcept
         {
-            components.fill(value);
+			std::fill(begin(), end(), value);
             return *this;
         }
 
@@ -802,13 +814,11 @@ namespace pollux::math
 
 			assert(needed_size > 0);
 
-			std::string buffer;
-			buffer.resize(needed_size + 1);
+			std::string buffer(needed_size, '\0');
 
 			[[maybe_unused]]
 			std::size_t writted_size = std::snprintf(buffer.data(), 
-													 std::min(buffer.capacity() - 1, 
-															  needed_size + 1), 
+													 needed_size + 1,
 													 fmt, N, detail::name_of<T>);
 
 			assert(writted_size && writted_size <= needed_size);
@@ -831,7 +841,7 @@ namespace pollux::math
 
         friend constexpr std::ostream& operator<< (std::ostream& os, const vec& v)
         {
-			return (os << v.to_str() << '\n');
+			return (os << v.to_str());
         }
 
         constexpr operator std::array<T, N>() const noexcept 
@@ -900,13 +910,6 @@ namespace pollux::math
     constexpr auto operator* (T n, const vec<N, T>& u) noexcept
     {
         return u * n;
-    }
-
-    template <size_t N, typename T>
-    [[nodiscard]]
-    constexpr auto operator* (const vec<N, T>& u, const vec<N, T>& v) noexcept
-    {
-        return u.dot(v);
     }
 
     template <size_t N, typename T>
