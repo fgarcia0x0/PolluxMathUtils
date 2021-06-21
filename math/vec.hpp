@@ -73,17 +73,11 @@ namespace pollux::math::detail
     template <typename T, typename... Rest>
     constexpr inline bool all_convertible_v = std::conjunction_v<std::is_convertible<T, Rest>...>;
 
-    template <typename T, typename = void>
-    struct is_iterator : std::false_type{};
+	template <typename Iter>
+	using IterCategory = typename std::iterator_traits<Iter>::iterator_category;
 
-    template <typename T>
-    struct is_iterator<T, std::void_t<
-        typename std::iterator_traits<T>::iterator_category
-    >> : std::true_type{};
-
-    template <typename Iter>
-    constexpr inline bool is_iterator_v = is_iterator<std::decay_t<Iter>>::value;
-
+	template <typename Iter, typename Category = std::input_iterator_tag>
+	constexpr inline bool is_iterator_v = std::is_convertible_v<IterCategory<std::decay_t<Iter>>, Category>;
 
     /**
      * @brief      Verifies that two floating point values are equals with a
@@ -308,8 +302,11 @@ namespace pollux::math
          *
          * @tparam     Iter   The iterator type
          */
-        template <typename Iter, typename = std::enable_if_t<detail::is_iterator_v<Iter>>>
-        constexpr vec(Iter first, Iter last)
+        
+        template <typename Iter,
+                  typename = std::enable_if_t<!detail::is_same_v<Iter, value_type>>,
+				  typename = std::enable_if_t<detail::is_iterator_v<Iter, std::forward_iterator_tag>>>
+        constexpr vec(Iter first, Iter last) noexcept
         {
             using iter_type = typename std::iterator_traits<std::decay_t<Iter>>::value_type;
             using diff_type = typename std::iterator_traits<std::decay_t<Iter>>::difference_type;
@@ -320,6 +317,7 @@ namespace pollux::math
             assert(std::distance(first, last) == diff_type(N));
             std::copy(first, last, begin());
         }
+        
 
 		/**
          * @brief      Calculate the length (or magnitude) of this vector
@@ -339,11 +337,12 @@ namespace pollux::math
             using F = std::conditional_t<std::is_floating_point_v<value_type>, 
 										 value_type, double>;
             
-			value_type result{ (*this) * (*this) };
-			F squared = sqrt_fn(static_cast<F>(result));
+			value_type result = this->dot(*this);
+			F squared = std::forward<SqrtFn>(sqrt_fn)(static_cast<F>(result));
 
             return detail::round_if<value_type>(
-				squared, !std::is_floating_point_v<value_type>
+				std::move(squared), 
+				!std::is_floating_point_v<value_type>
 			);
         }
 
@@ -456,7 +455,7 @@ namespace pollux::math
 										  value_type, double>;
             
             // ||v||^2 == v * v
-            value_type len{ (*this) * (*this) };
+            value_type len{ this->dot(*this) };
             
 			if (len > value_type{})
 			{
@@ -595,7 +594,7 @@ namespace pollux::math
                              ClampFn&& clamp_fn = {}) noexcept
         {
 			for (value_type& value : (*this))
-				value = clamp_fn(std::move(value), min, max);
+				value = std::forward<ClampFn>(clamp_fn)(std::move(value), min, max);
 
             return *this;
         }
@@ -627,7 +626,12 @@ namespace pollux::math
          */
         constexpr vec& mul_add(const vec& v1, const vec& v2) noexcept
         {
-            return *this = (std::move(*this) * v1) + v2;
+			auto& this_ref = *this;
+
+			for (size_type i = 0; i < N; ++i)
+				this_ref[i] = (std::move(this_ref[i]) * v1[i]) + v2[i];
+
+            return this_ref;
         }
 
         /**
